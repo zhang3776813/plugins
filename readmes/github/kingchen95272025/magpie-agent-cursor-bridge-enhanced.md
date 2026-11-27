@@ -1,12 +1,12 @@
 # Cursor · Magpie Bridge（增强版）
 
-让普通版 Cursor 使用 **Magpie** 中配置的模型与路由组：模型菜单只列出 Magpie 目录，隐藏 Cursor Auto 入口，保留 Cursor 原有登录与 Tab 补全。
+**无需 Cursor 订阅也能用**：本插件把 **Magpie** 中配置的模型与路由组接入 Cursor 的模型菜单，默认隐藏 Cursor Auto 入口，保留 Cursor 原有登录与 Tab 补全；也可开启「显示 Cursor 官方模型」，让官方模型与 Magpie 模型同时可选。
 
-- **当前版本**：`0.2.38`（本地增强版）
-- **适配范围**：Cursor 3.28.x ～ 3.32.5（已实测）；控制台会读取本机实际版本，超出范围时标记「未验证」并建议先运行自检
+- **当前版本**：`0.2.41`（本地增强版）
+- **适配范围**：Cursor 3.28.x ～ 3.32.10（已实测）；控制台会读取本机实际版本，超出范围时标记「未验证」并建议先运行自检
 - **平台支持**：macOS（Apple Silicon 与 Intel x64，LaunchAgent 守护；Intel 引擎为 `bin/darwin-x64/cursor-magpie-bridge`）、Windows x64（启动文件夹 VBS 守护，被安全软件拦截时自动回退到 `HKCU` Run 注册表项，`bin/win32-x64/cursor-magpie-bridge.exe`，无需管理员权限即可常驻；首次信任证书需一次管理员确认）与 Linux x64/arm64（systemd 用户单元守护，`bin/linux-<arch>/cursor-magpie-bridge`；证书写入 Cursor `argv.json` 与用户 NSS 库，无需 root；无 systemd 用户实例时回退为分离进程）
 - **与上游的关系**：基于 [nodlles/magpie-agent-cursor-bridge](https://github.com/nodlles/magpie-agent-cursor-bridge) `v0.2.2` 与本机 fork 增补，原生核心来自 [leookun/cursor-byok v1.0.1](https://github.com/leookun/cursor-byok/tree/v1.0.1)；Linux 适配参考 [Ice0828/magpie-agent-cursor-bridge-linux](https://github.com/Ice0828/magpie-agent-cursor-bridge-linux)
-- **本仓库定位**：公开增强版，GitHub topic 已标记 `magpie-plugin`；可从 Magpie 插件页安装 `github:kingchen95272025/magpie-agent-cursor-bridge-enhanced#v0.2.38`，也支持本机源码安装
+- **本仓库定位**：公开增强版，GitHub topic 已标记 `magpie-plugin`；可从 Magpie 插件页安装 `github:kingchen95272025/magpie-agent-cursor-bridge-enhanced#v0.2.41`，也支持本机源码安装
 - **变更记录**：[CHANGELOG.md](CHANGELOG.md)
 
 ---
@@ -51,7 +51,8 @@ Cursor 的 Agent / Composer 默认只认自家订阅与官方后端。通过 Mag
 | Agent / Composer 对话（含流式文本、思考过程） | ✅ |
 | 工具调用循环（读写文件、执行命令、MCP） | ✅ |
 | Magpie 模型目录同步（每 15 秒） | ✅ |
-| 模型选择器隐藏 Cursor Auto | ✅ |
+| 模型选择器隐藏 Cursor Auto（仅桥接目录模式） | ✅ |
+| Cursor 官方模型与 Magpie 模型共存（控制台开关，默认关闭） | ✅ 0.2.40 |
 | 模型显示名短名化（`Opus` 而非三段长名） | ✅ 0.2.4 |
 | 运行模式：默认 / 轻量（SQLite 不落盘） | ✅ 0.2.6 |
 | Multitask 后台子代理完成后父代理接管 | ✅ 0.2.7 |
@@ -74,6 +75,7 @@ Cursor 的 Agent / Composer 默认只认自家订阅与官方后端。通过 Mag
 | 参数卡片默认收起、标题显示运行模式 | ✅ 0.2.36 |
 | 自动清理移出 supervisor 主进程，对话不再被保留任务卡断 | ✅ 0.2.37 |
 | Cursor 本地存储浏览 / 按类体积诊断 / 会话删除 / 压缩 | ✅ 0.2.38 |
+| Cursor 关闭后仍可浏览与删除本地存储 | ✅ 0.2.39 |
 | Windows 自启动被拦截时回退注册表，setup 不再中止 | ✅ 0.2.37 |
 | Cursor 3.29+ 二进制协议编码 | ✅ 0.2.3 |
 | Cursor 3.27 本地循环开关回退 | ✅ 上游 0.2.2 |
@@ -171,7 +173,8 @@ Cursor 请求里的 `requested_model.model_id` 是桥接生成的 `model_hash`�
 
 - 监视器每 15 秒请求 Magpie `GET /v1/models`，变化时原子写入 `effective.json`；
 - 原生桥接读取 `effective.json`，在 `AvailableModels` 响应里返回 Magpie 目录；
-- 同时写入 `display_configuration`，隐藏 Cursor 内置的 Auto 入口；
+- 默认只发布桥接自己的目录，并写入 `display_configuration` 隐藏 Cursor 内置的 Auto 入口；
+- **合并模式**（控制台「显示 Cursor 官方模型」，默认关闭）：同一响应会先透传 Cursor 官方目录，再追加 Magpie 目录，因此官方模型与 Magpie 模型同时可选；Magpie 模型按 `named_model_section_index` 与 `model_picker_badges` 显示为「Cursor Models」分节中的 `MAGPIE` 角标，官方模型无角标。此时 `display_configuration` 不再注入，Cursor 的 Auto 视图随官方响应恢复。官方模型请求按 `model_hash` 查表未命中，原样转发 Cursor 官方并按 Cursor 订阅计费；Magpie 模型仍走本地引擎。
 - **0.2.4 起** `display_name` 只取 Magpie 模型名的第一段（` · ` 之前），tooltip 仍保留完整 ID：
 
 | Magpie 名称 | 显示名 |
@@ -225,7 +228,7 @@ Cursor 请求里的 `requested_model.model_id` 是桥接生成的 `model_hash`�
 从 Magpie 插件页安装（推荐）——在 **Magpie → Plugins** 添加固定版本地址：
 
 ```text
-github:kingchen95272025/magpie-agent-cursor-bridge-enhanced#v0.2.38
+github:kingchen95272025/magpie-agent-cursor-bridge-enhanced#v0.2.41
 ```
 
 安装后在终端运行一次包内初始化：
@@ -245,7 +248,7 @@ bash setup.command
 
 1. 校验二进制摘要与版本配对（`integrity.json` 分别固定插件版本 `version` 与随包引擎版本 `engineVersion`，分平台摘要见 `platforms`）；
 2. 复用已有证书，或在首次安装时生成本机 CA 并完成平台信任：macOS 请求系统授权、Windows 加入本机 Root、Linux 写入 Cursor `argv.json` 并尽力导入用户 NSS 库；
-3. 把完整版本目录 stage 到 `releases/0.2.38-xxxxxx`；载荷、引擎与运行时都未变化时直接复用已有目录，各平台只保留当前激活的 release；
+3. 把完整版本目录 stage 到 `releases/0.2.41-xxxxxx`；载荷、引擎与运行时都未变化时直接复用已有目录，各平台只保留当前激活的 release；
 4. 把 `~/.local/share/magpie-cursor-bridge` 注册为本地 Magpie 插件；
 5. 停止旧后台、切换服务定义（LaunchAgent / 启动文件夹或 Run 注册表项 / systemd 用户单元）、启动新后台。
 
@@ -287,7 +290,8 @@ magpie cursor-bridge default        # 断开，Cursor 恢复原代理
 - 在 **Cursor 模型菜单** 或 **Magpie Agents 页面**切换；
 - Magpie 中当前选中的模型会排在列表首位；
 - 新增模型后桥接会在 15 秒内同步，Cursor 菜单可能需要重新打开才能看到；
-- 已有聊天若仍显示 Auto，手动改选一次即可。
+- 已有聊天若仍显示 Auto，手动改选一次即可；
+- 在控制台「显示 Cursor 官方模型」开启后，菜单会同时列出 Cursor 官方模型与带 `MAGPIE` 角标的 Magpie 模型：官方模型按 Cursor 订阅计费，Magpie 模型按 Magpie 计费；关闭后恢复为只显示 Magpie 模型。切换开关会就地重启引擎（通常 3–4 秒，代理端口不变），当前对话可能中断一次；切换后若菜单未变化，重新打开模型选择器，仍不更新时重启一次 Cursor。
 
 ### 3.5 控制台（Agent 行菜单）
 
@@ -305,15 +309,15 @@ Magpie 的代理卡片内部是内置 UI，插件无法把控件插进那张卡�
 - **状态**：macOS / Linux 为 `bash setup.command status`，Windows 为 `install.js status`，同时刷新运行概览
 - **重启**：终止 supervisor 与原生引擎后重新执行「启动」；macOS 额外 `launchctl bootout`，Linux 额外 `systemctl --user stop`
 - **运行模式**：默认模式 / 轻量模式。轻量模式让原生引擎使用进程内存中的 SQLite（shared-cache），不写 `data/bridge.db`；切换后 supervisor 在 2 秒内自动重启引擎，当前对话可能中断一次。轻量模式会沿用上次的代理端口（端口占用时回退随机），避免 Cursor 因端口变化而需要重启。
-- **可编辑参数**：折叠卡片，默认收起，点击标题或右侧箭头展开；收起时标题右侧显示当前运行模式（如「默认模式 · 展开编辑」）。展开后按「运行与引擎 / 接管与集成 / 模型与日志 / 数据保留」四组多行排列，每项旁的 `?` 悬浮显示说明、点击可固定（再点或点击空白处关闭）。参数包括模型目录同步间隔（默认 15 秒）、网关断线容错（默认 60 秒）、引擎日志上限（默认 4 MiB）、调用日志保留（默认 7 天，0=不自动清理）、历史会话保留（默认 0=不自动清理）、接管 Orca 聊天（默认开启），写入 `~/.config/magpie-cursor-bridge/bridge-settings.json`。运行模式与同步间隔、容错在下一轮循环生效（模式变更会重启引擎）；日志上限在下次后台启动时生效；保留策略由 supervisor 启动独立子进程后台分批执行，数据库操作不占用主循环、不中断对话、不执行 VACUUM，结果写入 `retention.json` 并显示在控制台「自动清理」一栏。`orcaTakeover` 是持久意图：保存后立即应用，Orca 运行中则在它退出后由 supervisor 自动完成，重跑 setup 也遵循该值。
+- **可编辑参数**：折叠卡片，默认收起，点击标题或右侧箭头展开；收起时标题右侧显示当前运行模式（如「默认模式 · 展开编辑」）。展开后按「运行与引擎 / 接管与集成 / 模型与日志 / 数据保留」四组多行排列，每项旁的 `?` 悬浮显示说明、点击可固定（再点或点击空白处关闭）。参数包括模型目录同步间隔（默认 15 秒）、网关断线容错（默认 60 秒）、引擎日志上限（默认 4 MiB）、调用日志保留（默认 7 天，0=不自动清理）、历史会话保留（默认 0=不自动清理）、接管 Orca 聊天（默认开启）、显示 Cursor 官方模型（默认关闭），写入 `~/.config/magpie-cursor-bridge/bridge-settings.json`。运行模式与同步间隔、容错在下一轮循环生效（模式变更会重启引擎）；日志上限在下次后台启动时生效；保留策略由 supervisor 启动独立子进程后台分批执行，数据库操作不占用主循环、不中断对话、不执行 VACUUM，结果写入 `retention.json` 并显示在控制台「自动清理」一栏。`orcaTakeover` 是持久意图：保存后立即应用，Orca 运行中则在它退出后由 supervisor 自动完成，重跑 setup 也遵循该值。
 - **模型显示名、顺序与隐藏**：控制台独立的「模型显示名」折叠卡片（默认收起，展开才读取模型目录）中，每个模型一行：拖动行首 `⋮⋮` 调整顺序、勾选「菜单」决定是否在 Cursor 中显示、填写显示名、行内「保存」只更新该行名称；「测试」向 Magpie 网关发送一条极短请求并显示延迟；顶部搜索框可按模型 ID 或名称过滤；底部「保存全部」一次保存名称、顺序与隐藏项。配置写入 `bridge-settings.json` 的 `modelNames`、`modelOrder` 与 `modelHidden`，只影响传给引擎的目录，模型 ID、路由、计费与连接语义不变；当前选中的模型即使被隐藏也始终保留，避免路由失效。保存后 supervisor 更新 `effective.json`，引擎热更新模型目录，约 2–4 秒生效。
 - **快捷入口**：配置目录、数据目录、诊断目录、`engine.log`、`supervisor.log`、`supervisor-error.log`、安装目录、插件目录。
 - **日志与诊断**：折叠卡片可读取三类日志的尾部（100–1000 行），按证书、端口、网关、协议、连接停滞、启动超时、代理改动归类并给出操作建议；Windows 后台没有控制台，supervisor 的启动、重启、网关告警与错误会镜像写入 `supervisor.log` / `supervisor-error.log`（4 MiB 轮转），同样可在此读取；「导出诊断包」把状态、设置、版本、平台、保留结果与脱敏日志写入 `data/diagnostics/diagnostics-<时间>.json`，并返回文件路径。
-- **Cursor 存储**：折叠卡片浏览 Cursor 自己的 `globalStorage/state.vscdb`（不是桥接的 `bridge.db`），用于查清几十 GB 的库到底花在哪里。概览显示文件 / WAL / 页数 / 空闲页与会话总数；会话列表按 `composerHeaders` 的索引读取，可按项目（`workspaceStorage/*/workspace.json` 映射到真实路径）、主会话 / 子代理 / 归档筛选，可按最近 7 天 / 1 个月 / 3 个月 / 半年 / 一年、早于 7 天 / 1 个月 / 3 个月 / 半年或自定义起止日期筛选，也可按已命名 / 未命名与 agent / chat / multitask 模式筛选；筛选区带标签、统一外观并可一键重置，默认每页 10 条（可选 10 / 20 / 50 / 100），分页显示「第 X / Y 页」；每行显示 8 位会话 ID（悬停看完整值）与会话体积（列表先渲染，体积随后一次请求合并计算并缓存 5 分钟，不阻塞浏览）；点击「打开」在弹窗中以 Cursor Chat 式布局查看会话（用户消息气泡、助手正文、工具单行摘要）：按 `bubbleId:<composerId>:` 前缀读取消息，流式快照（`/s:<n>`）只计数不列出，Agent 工具调用（`call_*`）默认以单行「动词 + 目标」显示（读取 文件名、搜索文件 glob、执行命令 命令行、子代理 描述），点击展开参数与结果，取消「显示工具调用」可只看对话；不设分页，滚动到底自动追加，首屏不足一屏时自动补足；点击「查看原文」在弹窗中查看格式化 JSON（单条服务端截断 512 KB）。体积诊断按 Cursor 官方的 8 个前缀类别统计，**打开面板不会扫盘**：小类点击即精确统计，`Agent 内容块 / 会话数据 / 消息正文 / 文件检查点` 默认用 1/16 十六进制分桶采样估算（约 15–30 秒），也可选择精确统计（内容块类可能数分钟），结果缓存 2 分钟。会话列表支持勾选（含全选当前页）后批量删除，也可按当前筛选「删除筛选结果」（单次上限 100 个会话）；删除前弹窗会统计行数、体积、数据库大小与磁盘可用，并要求勾选「已完全退出 Cursor」加输入「删除」确认，服务端还会再检测一次 Cursor 进程，运行中直接拒绝。删除范围只限会话自身的数据键（含消息、检查点、请求上下文、代码差异与 `composerHeaders` 行），不触碰 `agentKv:blob`；空间需要「清理与压缩」中的 VACUUM 才会释放，执行前校验临时空间并在完成后显示释放量。卡片底部的「官方清理入口」列出 Cursor 命令面板中的 `Developer: Delete Old Chats`、`Developer: GC Agent KV Blobs`、`Developer: Reclaim Free Space` 并说明其保护范围，本面板不代为执行官方命令。浏览与统计只用 `-readonly` 连接，Cursor 运行中也可查看；删除与压缩是显式写操作，执行前强制检测 Cursor 进程，运行中直接拒绝。
+- **Cursor 存储**：折叠卡片浏览 Cursor 自己的 `globalStorage/state.vscdb`（不是桥接的 `bridge.db`），用于查清几十 GB 的库到底花在哪里。概览显示文件 / WAL / 页数 / 空闲页与会话总数；会话列表按 `composerHeaders` 的索引读取，可按项目（`workspaceStorage/*/workspace.json` 映射到真实路径）、主会话 / 子代理 / 归档筛选，可按最近 7 天 / 1 个月 / 3 个月 / 半年 / 一年、早于 7 天 / 1 个月 / 3 个月 / 半年或自定义起止日期筛选，也可按已命名 / 未命名与 agent / chat / multitask 模式筛选；筛选区带标签、统一外观并可一键重置，默认每页 10 条（可选 10 / 20 / 50 / 100），分页显示「第 X / Y 页」；每行显示 8 位会话 ID（悬停看完整值）与会话体积（列表先渲染，体积随后一次请求合并计算并缓存 5 分钟，不阻塞浏览）；点击「打开」在弹窗中以 Cursor Chat 式布局查看会话（用户消息气泡、助手正文、工具单行摘要）：按 `bubbleId:<composerId>:` 前缀读取消息，流式快照（`/s:<n>`）只计数不列出，Agent 工具调用（`call_*`）默认以单行「动词 + 目标」显示（读取 文件名、搜索文件 glob、执行命令 命令行、子代理 描述），点击展开参数与结果，取消「显示工具调用」可只看对话；不设分页，滚动到底自动追加，首屏不足一屏时自动补足；点击「查看原文」在弹窗中查看格式化 JSON（单条服务端截断 512 KB）。体积诊断按 Cursor 官方的 8 个前缀类别统计，**打开面板不会扫盘**：小类点击即精确统计，`Agent 内容块 / 会话数据 / 消息正文 / 文件检查点` 默认用 1/16 十六进制分桶采样估算（约 15–30 秒），也可选择精确统计（内容块类可能数分钟），结果缓存 2 分钟。会话列表支持勾选（含全选当前页）后批量删除，也可按当前筛选「删除筛选结果」（单次上限 100 个会话）；删除前弹窗会统计行数、体积、数据库大小与磁盘可用，并要求勾选「已完全退出 Cursor」加输入「删除」确认，服务端还会再检测一次 Cursor 进程，运行中直接拒绝。删除范围只限会话自身的数据键（含消息、检查点、请求上下文、代码差异与 `composerHeaders` 行），不触碰 `agentKv:blob`；空间需要「清理与压缩」中的 VACUUM 才会释放，执行前校验临时空间并在完成后显示释放量。卡片底部的「官方清理入口」列出 Cursor 命令面板中的 `Developer: Delete Old Chats`、`Developer: GC Agent KV Blobs`、`Developer: Reclaim Free Space` 并说明其保护范围，本面板不代为执行官方命令。浏览与统计优先用 `-readonly` 连接：Cursor 运行中可直接查看；Cursor 退出后其 `-wal` / `-shm` 会被清理，此时自动回退为带 `PRAGMA query_only` 的只读语义连接（语句层拒绝任何写入），因此关闭 Cursor 后仍能浏览、选择并删除会话。删除与压缩是显式写操作，执行前强制检测 Cursor 进程，运行中直接拒绝。
 - **最近调用**：折叠卡片读取 `llm_calls` 最近 25/50/100 条，显示时间、模型、状态、耗时、token（入/出/总）与错误摘要；可切换「只看错误」，错误内容脱敏；只读查询走 `created_at_ms` 索引，不扫描请求正文。
 - **版本更新**：控制台「检查更新」读取 GitHub latest Release，显示当前与最新版本；干净源码安装可「升级并重启」（`git fetch` + `--ff-only` 合并 tag + `setup.command`），其他安装方式显示 `magpie plugin update` 等手动命令。检查结果缓存 10 分钟；GitHub API 不可达时给出错误，不影响桥接运行。
 - **分层自检**：同卡片中的「运行自检」依次检查插件版本、Magpie 连接、引擎 PID、代理端口、MITM 证书链路、网关目录，以及可选的极短模型请求（默认勾选，可能计费）。结果以检查表显示并给出失败层；它覆盖到模型层，Cursor 的 Bidi/RunSSE 原生往返仍由构建侧的 `magpie_smoke` 示例覆盖。
-- **Cursor 版本**：控制台读取本机 Cursor 安装版本，与已实测范围 3.28.x–3.32.5 比较；超出范围显示「未验证」并提示先运行自检。
+- **Cursor 版本**：控制台读取本机 Cursor 安装版本，与已实测范围 3.28.x–3.32.10 比较；超出范围显示「未验证」并提示先运行自检。
 
 控制服务只监听 `127.0.0.1:3580`（可在引导页修改，约 2 秒切换），每次启动生成随机口令，并校验 `Host` 与 `Origin`。它由 Magpie 插件宿主拉起，**后台桥接停止时仍能点「启动」**。`magpie web`（浏览器远程）下无法访问本机环回地址，控制台不可用。顶部「刷新页面」右侧的 GitHub 链接通过本机默认浏览器打开本项目仓库；地址取自 `package.json` 的 `homepage` / `repository`，未配置时自动隐藏。
 
@@ -329,7 +333,7 @@ bash setup.command status    # 输出 status.json 原文
 
 ```json
 {
-  "version": "0.2.38",
+  "version": "0.2.41",
   "state": "connected",
   "mode": "lite",
   "engineMode": "lite",
@@ -373,6 +377,12 @@ bash setup.command uninstall
 |---|---|---|
 | Composer 提示 “Connection stalled” | 协议不兼容（如 3.29+ 的 `data_binary`） | 确认运行版本 ≥ 0.2.3 |
 | 模型菜单为空 | 目录未同步 / Magpie 网关不可达 | 查 `status.json`、`engine.log`，确认 Magpie 在运行 |
+| 开启「显示 Cursor 官方模型」后仍只有 Magpie 模型 | Cursor 未登录、官方目录请求失败或离线，已回退本地目录 | 确认 Cursor 已登录且能正常使用官方模型；查看 `engine.log` 中的 `Cursor catalog upstream unavailable` / `merge failed` |
+| 官方模型与 Magpie 模型如何区分计费 | 官方模型无角标，按 Cursor 订阅计费；Magpie 模型带 `MAGPIE` 角标，按 Magpie 计费 | 以菜单中是否带 `MAGPIE` 角标为准；不确定时先切到 Magpie 模型 |
+| 关闭官方模型后 Auto 消失 | 桥接目录模式会隐藏 Cursor 内置 Auto | 属预期；需要 Auto 时开启「显示 Cursor 官方模型」 |
+| 控制台点「保存」没有任何反应（尤其是在 Magpie 内嵌页中） | Magpie 用 `sandbox="allow-scripts"`（不含 `allow-forms`）承载插件页面，浏览器会跳过表单提交、`submit` 事件不触发；0.2.40 及更早的保存按钮依赖表单提交 | 升级到 0.2.41+ 并刷新控制台页面（旧页面仍是旧按钮）；按钮已改为普通点击事件，回车也可保存 |
+| Windows：保存时提示「文件正被其他程序占用」 | 后台每 2 秒轮询设置文件，杀毒扫描或句柄滞留会让替换瞬间失败 | 0.2.41+ 已自动重试；仍失败时稍后重试，或把安装目录加入杀毒软件排除项 |
+| 切换「显示 Cursor 官方模型」后短暂断流 | 切换会就地重启引擎（约 3–4 秒），进行中的对话可能中断一次 | 属预期；等状态卡片「模型目录」不再显示「切换中」后继续对话 |
 | 提示未登录 / `ERROR_NOT_LOGGED_IN` | 非 AI 请求被转发到 Cursor 官方，属预期 | 忽略；不影响 Agent 对话 |
 | 修改代理后桥接暂停 | 检测到外部程序改动 `http.proxy` | 在 Magpie 中断开后重新连接 |
 | 更新后仍是旧行为 | 后台未切换 | 重跑 `setup.command`，必要时重启 Cursor |
@@ -596,7 +606,7 @@ node test/manual-lifecycle.mjs
 
 ### 5.1 差异总览
 
-| 项目 | 上游 0.2.2 | 增强版 0.2.38 | 机制 |
+| 项目 | 上游 0.2.2 | 增强版 0.2.41 | 机制 |
 |---|---|---|---|
 | Cursor 3.29+ / 3.30.20 | ❌ 30 秒后 “Connection stalled” | ✅ 正常对话 | 上行编码从 hex 文本改为原始 protobuf 字节 |
 | `BidiAppend` 载荷 | 只接受 `data`（tag 1，hex） | `data_binary`（tag 4）优先，`data` 兜底 | 同一消息的两种编码，共用一个解码器 |
@@ -605,7 +615,7 @@ node test/manual-lifecycle.mjs
 | Cursor 3.27 / 3.28.x | ✅ | ✅ | 公共路径未改动 |
 | 运行模式 | 仅文件库 | 默认 + 轻量（内存库） | 轻量模式不写 `bridge.db`，适合磁盘敏感或只做转发的场景 |
 | Multitask 后台子代理 | 完成后不接管，子代理停在 Stopped | 完成即唤醒父代理，状态回写 Success | 完成通知进入运行时，不再当作 unsupported action 丢弃 |
-| 分发方式 / 版本 | GitHub 插件页 / 0.2.2 | 本机 fork / 0.2.38 | 避免与上游 release 目录、摘要互相覆盖 |
+| 分发方式 / 版本 | GitHub 插件页 / 0.2.2 | 本机 fork / 0.2.41 | 避免与上游 release 目录、摘要互相覆盖 |
 
 ### 5.2 0.2.7：Multitask 后台子代理完成后的接管
 
